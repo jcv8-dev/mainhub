@@ -1,0 +1,1423 @@
+esphome:
+  name: display32
+  platform: ESP32
+  board: wemos_d1_mini32
+
+wifi:
+  ssid: "superfunnySSID"
+  password: "supersecretpassword"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Display32 Fallback Hotspot"
+    password: "i9fJHwc7n9MW"
+
+captive_portal:
+
+# Enable logging
+logger:
+  level: DEBUG
+
+# Enable Home Assistant API
+api:
+
+ota:
+
+
+sensor:
+
+####### ROTARY ENCODER #######
+
+  - platform: rotary_encoder
+    name: "Rotary Encoder"
+    id: encoder
+    pin_a: 
+      number: GPIO35
+    pin_b: 
+      number: GPIO39
+    resolution: 1
+    filters:
+      debounce: 30ms
+
+####### CLOCKWISE ########
+
+    on_clockwise:
+      then:
+        #if:
+        #  condition:
+        #    lambda: |-
+        #      return id(led_dim) == true;
+        #  then:
+        #    - homeassistant.service:
+        #        service: light.turn_on
+        #        data:
+        #          entity_id: light.led_lights
+        #          brightness: !lambda |-
+        #            return 255; //(id(led_brightness_ha).state + 5);
+        #  else:
+        - homeassistant.service:
+            service: media_player.volume_set
+            data:
+              entity_id: media_player.spotify_mnnfux
+              volume_level: !lambda |-
+                  id(volume_level) += 0.02;
+                  return id(volume_level);
+        - display.page.show: music
+        - script.execute: display_timer
+                    
+####### ANTICLOCKWISE #######
+                    
+    on_anticlockwise:
+      then:
+        #if:
+        #  condition:
+        #    lambda: |-
+        #      return id(led_dim) == true;
+        #  then:
+        #    homeassistant.service:
+        #      service: light.turn_on
+        #      data:
+        #        entity_id: light.led_lights
+        #        brightness: !lambda |-
+        #          return 150; //(id(led_brightness_ha) - 5);
+        #  else:
+        - homeassistant.service:
+            service: media_player.volume_set
+            data:
+              entity_id: media_player.spotify_mnnfux
+              volume_level: !lambda |-
+                  id(volume_level) -= 0.02;
+                  return id(volume_level);
+        - display.page.show: music
+        - script.execute: display_timer
+                    
+####### HOMEASSISTANT SENSORS
+                    
+  - platform: homeassistant
+    id: temp
+    entity_id: sensor.aht10_temperature_3
+  - platform: homeassistant
+    id: humid
+    entity_id: sensor.aht10_humidity_3
+#  - platform: homeassistant
+#    id: led_brightness_ha
+#    entity_id: light.led_lights
+#    attribute: brightness
+
+
+
+####### SCRIPTS #######
+
+script:
+  - id: led_dim_timer
+    mode: restart
+    then:
+      - delay: 5s
+      - globals.set:
+          id: led_dim
+          value: "false"
+  - id: master_check_status
+    mode: restart
+    then:
+      if:
+        condition:
+          - binary_sensor.is_off: ceiling_stat
+          - binary_sensor.is_off: rgbw_corner_stat
+          - binary_sensor.is_off: led_main_stat
+          - binary_sensor.is_off: baulampe_stat
+        then:
+          switch.turn_off: master_statusled
+  - id: display_timer
+    mode: restart
+    then:
+      - delay: 15s
+      - display.page.show: clear
+  - id: scene_status_led
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: |- 
+              return id(current_scene) == 0;
+          then:
+            - switch.turn_off: switch5_statusled
+            - switch.turn_off: switch6_statusled
+            - switch.turn_off: switch7_statusled
+      - if:
+          condition:
+            lambda: |- 
+              return id(current_scene) == 1;
+          then:
+            - switch.turn_on: switch5_statusled
+            - switch.turn_off: switch6_statusled
+            - switch.turn_off: switch7_statusled
+      - if:
+          condition:
+            lambda: |- 
+              return id(current_scene) == 2;
+          then:
+            - switch.turn_off: switch5_statusled
+            - switch.turn_on: switch6_statusled
+            - switch.turn_off: switch7_statusled
+      - if:
+          condition:
+            lambda: |- 
+              return id(current_scene) == 3;
+          then:
+            - switch.turn_off: switch5_statusled
+            - switch.turn_off: switch6_statusled
+            - switch.turn_on: switch7_statusled
+
+
+####### STATUS LEDS #######
+
+switch:
+  - platform: gpio
+    pin: GPIO26
+    id: master_statusled
+    internal: true
+  - platform: gpio
+    pin: GPIO03
+    id: switch1_statusled
+    internal: true
+  - platform: gpio
+    pin: GPIO17
+    id: switch2_statusled
+    internal: true
+  - platform: gpio
+    pin: GPIO23
+    id: switch3_statusled
+    internal: true
+  - platform: gpio
+    pin: GPIO13
+    id: switch4_statusled
+    internal: true
+  - platform: gpio
+    pin: GPIO18
+    id: switch5_statusled
+    internal: true
+  - platform: gpio
+    pin: GPIO16
+    id: switch6_statusled
+    internal: true
+  - platform: gpio
+    pin: GPIO04
+    id: switch7_statusled
+    internal: true
+
+
+####### BUTTONS #######
+  
+binary_sensor:
+
+####### ROTARY ENCODER BUTTON #######
+
+  - platform: gpio
+    pin: 
+      number: GPIO33
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Volume Switch"
+    on_press:
+      then:
+        - homeassistant.service:
+            service: media_player.turn_on
+            data:
+              entity_id: media_player.spotify_mnnfux
+        - homeassistant.service:
+            service: media_player.select_source
+            data:
+              source: Home Assistant
+              entity_id: media_player.spotify_mnnfux
+        - homeassistant.service:
+            service: media_player.media_play_pause
+            data:
+              entity_id: media_player.spotify_mnnfux
+        - display.page.show: music
+        - script.execute: display_timer
+    on_double_click:
+      min_length: 50ms
+      max_length: 500ms
+      then:
+        - homeassistant.service:
+            service: media_player.media_next_track
+            data:
+              entity_id: media_player.spotify_mnnfux 
+        - display.page.show: music
+        - script.execute: display_timer
+
+####### MASTER BUTTON #######
+
+  - platform: gpio
+    pin:
+      number: GPIO14
+      mode: INPUT_PULLUP
+    id: master_switch
+    filters:
+      - delayed_on: 100ms
+      - invert:
+    on_press:
+      - switch.toggle: master_statusled
+      - globals.set:
+          id: current_scene
+          value: '0'
+      - if: 
+          condition:
+            or:
+              - binary_sensor.is_on: ceiling_stat
+              - binary_sensor.is_on: rgbw_corner_stat
+              - binary_sensor.is_on: led_main_stat
+              - binary_sensor.is_on: baulampe_stat
+          then:
+            - homeassistant.service:
+                service: homeassistant.turn_on
+                data:
+                  entity_id: scene.all_off
+
+#            - homeassistant.service:
+#                service: light.turn_off
+#                data:
+#                  entity_id: light.led_lights
+#            - homeassistant.service:
+#                service: light.turn_off
+#                data:
+#                  entity_id: light.dimmer_switch
+#            - homeassistant.service:
+#                service: light.turn_off
+#                data:
+#                  entity_id: light.rgbw_corner
+#            - homeassistant.service:
+#                service: light.turn_off
+#                data:
+#                  entity_id: light.baulampe
+      - if: 
+          condition:
+            and:
+              - binary_sensor.is_off: ceiling_stat
+              - binary_sensor.is_off: rgbw_corner_stat
+              - binary_sensor.is_off: led_main_stat
+              - binary_sensor.is_off: baulampe_stat
+          then:
+            - homeassistant.service:
+                service: homeassistant.turn_on
+                data: 
+                  entity_id: scene.master_turn_on
+#            - homeassistant.service:
+#                service: light.turn_on
+#                data:
+#                  entity_id: light.led_lights
+#            - homeassistant.service:
+#                service: light.turn_on
+#                data:
+#                  entity_id: light.rgbw_corner
+#            - homeassistant.service:
+#                service: light.turn_on
+#                data:
+#                  entity_id: light.dimmer_switch
+#            - homeassistant.service:
+#                service: light.turn_on
+#                data:
+#                  entity_id: light.baulampe
+#                data_template:
+#                  rgb_color: "{{(red |int, green |int, blue|int)|list}}"
+#                variables:
+#                  red: "return 255;"
+#                  green: "return 220;"
+#                  blue: "return 110;"
+      - script.execute: scene_status_led
+
+
+
+####### BUTTON 1 #######
+
+  - platform: gpio
+    pin: 
+      number: GPIO27
+      mode: INPUT_PULLUP
+    id: switch1
+    filters:
+      - delayed_on: 100ms
+      - invert:
+    on_press:
+      then:
+        - switch.toggle: switch1_statusled
+        - homeassistant.service:
+            service: homeassistant.turn_on
+            data:
+              entity_id: script.mainhub_switch1
+        - script.execute: master_check_status
+        - display.page.show: changed
+        - script.execute: display_timer
+        - globals.set:
+            id: current_scene
+            value: '0'
+        - script.execute: scene_status_led
+
+
+####### BUTTON 2 #######
+
+  - platform: gpio
+    pin: 
+      number: GPIO25
+      mode: INPUT_PULLUP
+    id: switch2
+    filters:
+      - delayed_on: 100ms
+      - invert: 
+    on_press:
+      then:
+        - switch.toggle: switch2_statusled
+        - homeassistant.service:
+            service: homeassistant.turn_on
+            data:
+              entity_id: script.mainhub_switch2
+        - script.execute: master_check_status
+        - display.page.show: changed
+        - script.execute: display_timer
+        - globals.set:
+            id: current_scene
+            value: '0'
+        - script.execute: scene_status_led
+
+ 
+####### BUTTON 3 #######
+
+  - platform: gpio
+    pin: 
+      number: GPIO05
+      mode: INPUT_PULLUP
+    id: switch3
+    filters:
+      - delayed_on: 100ms
+      - invert: 
+    on_press:
+      then:
+        - switch.toggle: switch3_statusled
+        - homeassistant.service:
+            service: homeassistant.turn_on
+            data:
+              entity_id: script.mainhub_switch3
+        - script.execute: master_check_status
+        - display.page.show: changed
+        - script.execute: display_timer
+        - globals.set:
+            id: current_scene
+            value: '0'
+        - script.execute: scene_status_led
+
+####### BUTTON 4 #######
+### BAULAMPE ###
+
+  - platform: gpio
+    pin: 
+      number: GPIO02
+      mode: INPUT_PULLUP
+    id: switch4
+    filters:
+      - delayed_on: 100ms
+      - invert: 
+    on_press:
+      then:
+        - switch.toggle: switch4_statusled
+        - homeassistant.service:
+            service: homeassistant.turn_on
+            data:
+              entity_id: script.mainhub_switch4
+        - script.execute: master_check_status
+        - display.page.show: changed
+        - script.execute: display_timer
+        - globals.set:
+            id: current_scene
+            value: '0'
+        - script.execute: scene_status_led
+
+
+####### BUTTON 5 #######
+
+  - platform: gpio
+    pin: 
+      number: GPIO19
+      mode: INPUT_PULLUP
+    id: switch5
+    filters:
+      - delayed_on: 100ms
+      - invert:
+    on_press:
+      then:
+        - switch.toggle: switch5_statusled
+        - homeassistant.service:
+            service: homeassistant.turn_on
+            data:
+              entity_id: script.mainhub_switch5
+        - script.execute: master_check_status
+        - display.page.show: changed
+        - script.execute: display_timer
+        - globals.set:
+            id: current_scene
+            value: '1'
+        - script.execute: scene_status_led
+### DOUBLE CLICK
+#on_double_click:
+#      min_length: 20ms
+#      max_length: 1500ms
+#      then: 
+#        - if:
+#            condition: 
+#              lambda: |-
+#                return id(led_effect).state.c_str() == "Rainbow";
+#            then: 
+#              - homeassistant.service:
+#                  service: light.turn_on
+#                  data:
+#                    entity_id: light.led_lights
+#                    rgb_color: "[255, 255, 255]"
+#              - script.execute: master_check_status
+#            else:
+#              - homeassistant.service:
+#                  service: light.turn_on
+#                  data:
+#                    entity_id: light.led_lights
+#                    effect: "Rainbow"
+#              - script.execute: master_check_status
+
+
+####### BUTTON 6 #######
+
+  - platform: gpio
+    pin:
+      number: GPIO32
+      mode: INPUT_PULLUP
+    id: switch6
+    filters:
+      - delayed_on: 100ms
+      - invert:
+    on_press:
+      then:
+        - switch.toggle: switch6_statusled
+        - homeassistant.service:
+            service: homeassistant.turn_on
+            data:
+              entity_id: script.mainhub_switch6
+        - script.execute: master_check_status
+        - display.page.show: changed
+        - script.execute: display_timer
+        - globals.set:
+            id: current_scene
+            value: '2'
+        - script.execute: scene_status_led
+        
+        
+####### BUTTON 7 #######
+
+  - platform: gpio
+    pin:
+      number: GPIO00
+      mode: INPUT_PULLUP
+    id: switch7
+    filters:
+      - delayed_on: 100ms
+      - invert:
+    on_press:
+      then:
+        - switch.toggle: switch7_statusled
+        - homeassistant.service:
+            service: homeassistant.turn_on
+            data:
+              entity_id: script.mainhub_switch7
+        - script.execute: master_check_status
+        - display.page.show: changed
+        - script.execute: display_timer
+        - globals.set:
+            id: current_scene
+            value: '3'
+        - script.execute: scene_status_led
+
+
+####### CEILING LIGHT HA STATUS #######
+
+  - platform: homeassistant
+    id: ceiling_stat
+    entity_id: light.dimmer_switch
+    on_state:
+      - text_sensor.template.publish:
+          id: last_changed
+          state: "Light"
+      - if:
+          condition:
+            binary_sensor.is_on: ceiling_stat
+          then:
+            - switch.turn_on: switch1_statusled
+            - switch.turn_on: master_statusled
+            - text_sensor.template.publish:
+                id: last_changed_state
+                state: "On"
+      - if:
+          condition:
+            binary_sensor.is_off: ceiling_stat
+          then:
+            - switch.turn_off: switch1_statusled
+            - text_sensor.template.publish:
+                id: last_changed_state
+                state: "Off"
+            - script.execute: master_check_status
+      - display.page.show: changed
+      - script.execute: display_timer
+
+
+####### RGBW CORNER HA STATUS #######
+
+  - platform: homeassistant
+    id: rgbw_corner_stat
+    entity_id: light.rgbw_corner
+    on_state:
+      - text_sensor.template.publish:
+          id: last_changed
+          state: "Corner LED"
+      - if:
+          condition:
+            binary_sensor.is_on: rgbw_corner_stat
+          then:
+            - switch.turn_on: switch3_statusled
+            - switch.turn_on: master_statusled
+            - text_sensor.template.publish:
+                id: last_changed_state
+                state: "On"
+      - if:
+          condition:
+            binary_sensor.is_off: rgbw_corner_stat
+          then:
+            - switch.turn_off: switch3_statusled
+            - text_sensor.template.publish:
+                id: last_changed_state
+                state: "Off"
+            - script.execute: master_check_status
+      - display.page.show: changed
+      - script.execute: display_timer
+
+####### BAULAMPE HA STATUS #######
+
+  - platform: homeassistant
+    id: baulampe_stat
+    entity_id: light.baulampe
+    on_state:
+      - text_sensor.template.publish:
+          id: last_changed
+          state: "Baulampe"
+      - if:
+          condition:
+            binary_sensor.is_on: baulampe_stat
+          then:
+            - switch.turn_on: switch4_statusled
+            - switch.turn_on: master_statusled
+            - text_sensor.template.publish:
+                id: last_changed_state
+                state: "On"
+      - if:
+          condition:
+            binary_sensor.is_off: baulampe_stat
+          then:
+            - switch.turn_off: switch4_statusled
+            - text_sensor.template.publish:
+                id: last_changed_state
+                state: "Off"
+            - script.execute: master_check_status
+      - display.page.show: changed
+      - script.execute: display_timer
+
+####### LED MASTER HA STATUS #######
+
+  - platform: homeassistant
+    id: led_main_stat
+    entity_id: light.led_lights
+    on_state:
+      - text_sensor.template.publish:
+          id: last_changed
+          state: "Desk LED"
+      - if:
+          condition:
+            binary_sensor.is_on: led_main_stat
+          then:
+            - switch.turn_on: switch2_statusled
+            - switch.turn_on: master_statusled
+            - text_sensor.template.publish:
+                id: last_changed_state
+                state: "On"
+      - if:
+          condition:
+            binary_sensor.is_off: led_main_stat
+          then:
+            - switch.turn_off: switch2_statusled
+            - text_sensor.template.publish:
+                id: last_changed_state
+                state: "Off"
+            - script.execute: master_check_status
+      - display.page.show: changed
+      - script.execute: display_timer
+
+
+####### IMPORT HA TIME #######
+
+time:
+  - platform: homeassistant
+    id: hass_time
+
+
+####### TEXT SENSORS #######
+
+text_sensor:
+
+####### MEDIA PLAYER TITLE #######
+
+  - platform: homeassistant
+    id: title
+    entity_id: sensor.media_player_title
+
+####### MEDIA PLAYER ARTIST #######
+
+  - platform: homeassistant
+    id: artist
+    entity_id: sensor.media_player_artist
+
+####### MEDIA PLAYER VOLUME
+
+  - platform: homeassistant
+    id: hass_vol
+    entity_id: sensor.media_player_vol
+    on_value:
+      then:
+        - lambda: |-
+            id(volume_level) = atof(id(hass_vol).state.c_str());
+        - logger.log:
+            format: "%s"
+            args: ['id(hass_vol).state.c_str()']
+
+####### MEDIA PLAYER STATE #######
+
+  - platform: homeassistant
+    id: playing
+    entity_id: sensor.media_player_state
+
+####### LAST CHANGED ENTITY #######
+
+  - platform: template
+    name: last_changed
+    id: last_changed
+
+####### LAST CHANGED ENTITY STATE #######
+
+  - platform: template
+    id: last_changed_state
+
+####### LED MASTER EFFECT #######
+
+  - platform: homeassistant
+    id: led_effect
+    entity_id: sensor.led_main_effect
+
+
+
+####### I2C DEVICES #######
+
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 400khz
+  
+image:
+  - file: "spotify.png"
+    id: spotify
+    resize: 32x29
+  - file: "play.png"
+    id: play
+  - file: "pause.png"
+    id: paused
+
+animation:
+  - file: "rick.gif"
+    id: rick
+    type: BINARY
+
+
+interval:
+  - interval: 40ms
+    then:
+    - lambda: |-
+        id(rick).next_frame();
+    - component.update: oled
+  - interval: 60ms
+    then:
+    - lambda: |-
+        if(id(title).state.length() > id(title_thresh_char)){
+          //count delay up
+          id(title_delay_start_counter) += 1;
+          //if delay over
+          if(id(title_delay_start_counter) > id(title_delay)){
+            //move text
+            id(pos_title) += 1;
+          }
+        }
+        //if artist too long
+        if(id(artist).state.length() > id(artist_thresh_char)){
+          //count delay
+          id(artist_delay_start_counter) += 1;
+          //if delay over
+          if(id(artist_delay_start_counter) > id(artist_delay)){
+            //move text
+            id(pos_artist) += 1;
+          }
+        }
+        //if title at the end
+        if(id(pos_title) > (id(title).state.length() - id(title_thresh_char)) * id(title_pixel_per_char)){
+          //count delay
+          id(title_delay_end_counter) += 1;
+          //if end delay finished
+          if(id(title_delay_end_counter) > id(title_delay)){
+            //reset start delay
+            id(title_delay_end_counter) = 0;
+            id(title_delay_start_counter) = 0;
+            //reset title position
+            id(pos_title) = 0;
+          }
+        }
+        //if artist at the end
+        if(id(pos_artist) > (id(artist).state.length() - id(artist_thresh_char)) * id(artist_pixel_per_char)){
+          id(artist_delay_end_counter) += 1;
+          //if end delay finished
+          if(id(artist_delay_end_counter) > id(artist_delay)){
+            //reset start delay
+            id(artist_delay_end_counter) = 0;
+            id(artist_delay_start_counter) = 0;
+            id(pos_artist) = 0;
+          }
+        }
+    - component.update: oled  
+    
+
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x32"
+    id: oled
+    address: 0x3C
+    pages:
+      - id: sensors
+        lambda: |-
+          it.rectangle(0,0,it.get_width(), it.get_height());
+          it.strftime(it.get_width() / 6,it.get_height() / 2, id(regular16), TextAlign::CENTER, "%H:%M", id(hass_time).now());
+          it.line(it.get_width() / 3, 0, it.get_width() / 3, it.get_height());
+          //if(id(online) == false){
+          //  it.print((it.get_width() / 3) * 2,it.get_height() / 2, id(regular16), TextAlign::CENTER, "Hub offline");
+          //} else {
+            if(isnan(id(temp).state)){
+              it.print((it.get_width() / 3) * 2,it.get_height() / 2, id(regular16), TextAlign::CENTER, "Sensor offline");
+            } else {
+              it.printf(it.get_width() / 2, it.get_height() / 2, id(regular16), TextAlign::CENTER, "%.1f°", id(temp).state);
+              it.line((it.get_width() / 3) * 2, 0, (it.get_width() / 3)*2, it.get_height());
+              it.printf((it.get_width() / 6)*5, it.get_height() / 2, id(regular16), TextAlign::CENTER, "%.0f%%", id(humid).state);
+            }
+          //}
+          //it.filled_rectangle(0,0, it.get_width(), it.get_height(), COLOR_ON);
+          
+      - id: music
+        lambda: |-
+          if(id(title).state != "unknown" && id(artist).state != "unknown") {
+            it.printf(29 + 11 - id(pos_title), 0, id(regular16), TextAlign::LEFT, "%s", id(title).state.c_str());
+            it.printf(29 + 11 - id(pos_artist), it.get_height() / 2 + 2, id(regular10), TextAlign::LEFT, "%s", id(artist).state.c_str());
+            it.filled_rectangle(0, 0, 40, 32, COLOR_OFF);
+            
+            //playing status
+            if(id(playing).state == "False"){
+              it.image(29, 0, id(play));
+            } else {
+              it.image(29, 0, id(paused));
+            }
+          } else {
+            it.print((it.get_width() + it.get_height()) / 2 , it.get_height() / 2, id(regular16), TextAlign::CENTER, "idle");
+          }
+          if(id(title).state == "Never Gonna Give You Up"){
+              it.image(-3,-3, id(rick));
+            } else {
+              it.image(0, 0, id(spotify));
+            }
+          // volume indicator
+          it.line(0, 31, int(id(volume_level)*128), 31);
+          //it.filled_rectangle(0,0, it.get_width(), it.get_height(), COLOR_ON);
+      - id: changed
+        lambda: |-
+          it.rectangle(0, 0, it.get_width(), it.get_height());
+          it.printf(it.get_width() / 2, it.get_height() / 2, id(regular13), TextAlign::CENTER, "%s turned %s", id(last_changed).state.c_str(), id(last_changed_state).state.c_str());
+          //it.filled_rectangle(0,0, it.get_width(), it.get_height(), COLOR_ON);
+      - id: clear
+        lambda: |-
+          it.rectangle(0,0, it.get_width(), it.get_height(), COLOR_OFF);
+          
+
+globals:
+  - id: pos_title
+    type: int
+    initial_value: '0'
+  - id: pos_artist
+    type: int
+    initial_value: '0'
+  - id: title_thresh_char
+    type: int
+    initial_value: '13'
+  - id: artist_thresh_char
+    type: int
+    initial_value: '20'
+  - id: title_pixel_per_char
+    type: int
+    initial_value: '6'
+  - id: artist_pixel_per_char
+    type: int
+    initial_value: '5'
+  - id: title_delay
+    type: int
+    initial_value: '30'
+  - id: artist_delay
+    type: int
+    initial_value: '30'
+  - id: title_delay_start_counter
+    type: int
+    initial_value: '0'
+  - id: artist_delay_start_counter
+    type: int
+    initial_value: '0'  
+  - id: title_delay_end_counter
+    type: int
+    initial_value: '0'
+  - id: artist_delay_end_counter
+    type: int
+    initial_value: '0'
+  - id: current_page
+    type: int
+    initial_value: '0'
+  - id: max_page
+    type: int
+    initial_value: '1'
+  - id: display_delay
+    type: int
+    initial_value: '0'
+  - id: online
+    type: bool
+  - id: volume_level
+    type: float
+    initial_value: '0'
+  - id: last_effect
+    type: bool
+    initial_value: "false"
+  - id: led_brightness
+    type: int
+    initial_value: '255'
+  - id: led_dim
+    type: bool
+    initial_value: "false"
+  - id: display_on
+    type: bool
+    initial_value: "false"
+  - id: current_scene
+    type: int
+    initial_value: '0'
+  
+font:
+  - file: "comic.ttf"
+    id: comic
+    size: 16
+  - file: "Axel-Regular.ttf"
+    id: regular16
+    size: 15
+    glyphs:
+      - "`"
+      - "'"
+      - "´"
+      - "a"
+      - "b"
+      - "c"
+      - "d"
+      - "e"
+      - "f"
+      - "g"
+      - "h"
+      - "i"
+      - "j"
+      - "k"
+      - "l"
+      - "m"
+      - "n"
+      - "o"
+      - "p"
+      - "q"
+      - "r"
+      - "s"
+      - "t"
+      - "u"
+      - "v"
+      - "w"
+      - "x"
+      - "y"
+      - "z"
+      - "A"
+      - "B"
+      - "C"
+      - "D"
+      - "E"
+      - "F"
+      - "G"
+      - "H"
+      - "I"
+      - "J"
+      - "K"
+      - "L"
+      - "M"
+      - "N"
+      - "O"
+      - "P"
+      - "Q"
+      - "R"
+      - "S"
+      - "T"
+      - "U"
+      - "V"
+      - "W"
+      - "X"
+      - "Y"
+      - "Z"
+      - "!"
+      - "?"
+      - "("
+      - ")"
+      - "%"
+      - "^"
+      - "°"
+      - " "
+      - "§"
+      - "$"
+      - "-"
+      - "_"
+      - "."
+      - ","
+      - ";"
+      - ":"
+      - "+"
+      - "#"
+      - "*"
+      - "~"
+      - "ß"
+      - "="
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+      - "7"
+      - "8"
+      - "9"
+      - "0"
+      - "/"
+      - "<"
+      - ">"
+      - '"'
+      - "&"
+      - "ä"
+      - "ö"
+      - "ü"
+      - "Ä"
+      - "Ö"
+      - "Ü"
+      - "É"
+      - "È"
+      - "Ê"
+      - "é"
+      - "è"
+      - "ê"
+      - "á"
+      - "à"
+      - "â"
+      - "Á"
+      - "À"
+      - "Â"
+      - "ó"
+      - "ò"
+      - "ô"
+      - "Ó"
+      - "Ò"
+      - "Ô"
+      - "ú"
+      - "ù"
+      - "û"
+      - "Ú"
+      - "Ù"
+      - "Û"
+  - file: "Axel-Regular.ttf"
+    id: regular8
+    size: 8
+    glyphs:
+      - "`"
+      - "'"
+      - "´"
+      - "a"
+      - "b"
+      - "c"
+      - "d"
+      - "e"
+      - "f"
+      - "g"
+      - "h"
+      - "i"
+      - "j"
+      - "k"
+      - "l"
+      - "m"
+      - "n"
+      - "o"
+      - "p"
+      - "q"
+      - "r"
+      - "s"
+      - "t"
+      - "u"
+      - "v"
+      - "w"
+      - "x"
+      - "y"
+      - "z"
+      - "A"
+      - "B"
+      - "C"
+      - "D"
+      - "E"
+      - "F"
+      - "G"
+      - "H"
+      - "I"
+      - "J"
+      - "K"
+      - "L"
+      - "M"
+      - "N"
+      - "O"
+      - "P"
+      - "Q"
+      - "R"
+      - "S"
+      - "T"
+      - "U"
+      - "V"
+      - "W"
+      - "X"
+      - "Y"
+      - "Z"
+      - "!"
+      - "?"
+      - "("
+      - ")"
+      - "%"
+      - "^"
+      - "°"
+      - " "
+      - "§"
+      - "$"
+      - "-"
+      - "_"
+      - "."
+      - ","
+      - ";"
+      - ":"
+      - "+"
+      - "#"
+      - "*"
+      - "~"
+      - "ß"
+      - "="
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+      - "7"
+      - "8"
+      - "9"
+      - "0"
+      - "/"
+      - "<"
+      - ">"
+      - '"'
+      - "&"
+      - "É"
+      - "È"
+      - "Ê"
+      - "é"
+      - "è"
+      - "ê"
+      - "á"
+      - "à"
+      - "â"
+      - "Á"
+      - "À"
+      - "Â"
+      - "ó"
+      - "ò"
+      - "ô"
+      - "Ó"
+      - "Ò"
+      - "Ô"
+      - "ú"
+      - "ù"
+      - "û"
+      - "Ú"
+      - "Ù"
+      - "Û"
+  - file: "Axel-Regular.ttf"
+    id: regular10
+    size: 11
+    glyphs:
+      - "`"
+      - "´"
+      - "a"
+      - "b"
+      - "c"
+      - "d"
+      - "e"
+      - "f"
+      - "g"
+      - "h"
+      - "i"
+      - "j"
+      - "k"
+      - "l"
+      - "m"
+      - "n"
+      - "o"
+      - "p"
+      - "q"
+      - "r"
+      - "s"
+      - "t"
+      - "u"
+      - "v"
+      - "w"
+      - "x"
+      - "y"
+      - "z"
+      - "A"
+      - "B"
+      - "C"
+      - "D"
+      - "E"
+      - "F"
+      - "G"
+      - "H"
+      - "I"
+      - "J"
+      - "K"
+      - "L"
+      - "M"
+      - "N"
+      - "O"
+      - "P"
+      - "Q"
+      - "R"
+      - "S"
+      - "T"
+      - "U"
+      - "V"
+      - "W"
+      - "X"
+      - "Y"
+      - "Z"
+      - "!"
+      - "?"
+      - "("
+      - ")"
+      - "%"
+      - "^"
+      - "°"
+      - " "
+      - "§"
+      - "$"
+      - "-"
+      - "_"
+      - "."
+      - ","
+      - ";"
+      - ":"
+      - "+"
+      - "'"
+      - "#"
+      - "*"
+      - "~"
+      - "ß"
+      - "="
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+      - "7"
+      - "8"
+      - "9"
+      - "0"
+      - "/"
+      - "<"
+      - ">"
+      - '"'
+      - "&"
+      - "ä"
+      - "ö"
+      - "ü"
+      - "Ä"
+      - "Ö"
+      - "Ü"
+      - "É"
+      - "È"
+      - "Ê"
+      - "é"
+      - "è"
+      - "ê"
+      - "á"
+      - "à"
+      - "â"
+      - "Á"
+      - "À"
+      - "Â"
+      - "ó"
+      - "ò"
+      - "ô"
+      - "Ó"
+      - "Ò"
+      - "Ô"
+      - "ú"
+      - "ù"
+      - "û"
+      - "Ú"
+      - "Ù"
+      - "Û"
+  - file: "Axel-Regular.ttf"
+    id: regular13
+    size: 13
+    glyphs:
+      - "`"
+      - "'"
+      - "´"
+      - "a"
+      - "b"
+      - "c"
+      - "d"
+      - "e"
+      - "f"
+      - "g"
+      - "h"
+      - "i"
+      - "j"
+      - "k"
+      - "l"
+      - "m"
+      - "n"
+      - "o"
+      - "p"
+      - "q"
+      - "r"
+      - "s"
+      - "t"
+      - "u"
+      - "v"
+      - "w"
+      - "x"
+      - "y"
+      - "z"
+      - "A"
+      - "B"
+      - "C"
+      - "D"
+      - "E"
+      - "F"
+      - "G"
+      - "H"
+      - "I"
+      - "J"
+      - "K"
+      - "L"
+      - "M"
+      - "N"
+      - "O"
+      - "P"
+      - "Q"
+      - "R"
+      - "S"
+      - "T"
+      - "U"
+      - "V"
+      - "W"
+      - "X"
+      - "Y"
+      - "Z"
+      - "!"
+      - "?"
+      - "("
+      - ")"
+      - "%"
+      - "^"
+      - "°"
+      - " "
+      - "§"
+      - "$"
+      - "-"
+      - "_"
+      - "."
+      - ","
+      - ";"
+      - ":"
+      - "+"
+      - "#"
+      - "*"
+      - "~"
+      - "ß"
+      - "="
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+      - "7"
+      - "8"
+      - "9"
+      - "0"
+      - "/"
+      - "<"
+      - ">"
+      - '"'
+      - "&"
+      - "ä"
+      - "ö"
+      - "ü"
+      - "Ä"
+      - "Ö"
+      - "Ü"
+      - "É"
+      - "È"
+      - "Ê"
+      - "é"
+      - "è"
+      - "ê"
+      - "á"
+      - "à"
+      - "â"
+      - "Á"
+      - "À"
+      - "Â"
+      - "ó"
+      - "ò"
+      - "ô"
+      - "Ó"
+      - "Ò"
+      - "Ô"
+      - "ú"
+      - "ù"
+      - "û"
+      - "Ú"
+      - "Ù"
+      - "Û"
+      
