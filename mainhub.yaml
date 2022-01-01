@@ -21,9 +21,6 @@ logger:
 # Enable Home Assistant API
 api:
 
-ota:
-
-
 sensor:
 
 ####### ROTARY ENCODER #######
@@ -126,7 +123,11 @@ script:
           - binary_sensor.is_off: led_main_stat
           - binary_sensor.is_off: baulampe_stat
         then:
-          switch.turn_off: master_statusled
+          - switch.turn_off: master_statusled
+          - globals.set:
+              id: current_scene
+              value: '0'
+          - script.execute: scene_status_led
   - id: display_timer
     mode: restart
     then:
@@ -167,6 +168,19 @@ script:
             - switch.turn_off: switch5_statusled
             - switch.turn_off: switch6_statusled
             - switch.turn_on: switch7_statusled
+  - id: scene_status_fix
+    mode: restart
+    then:
+      - globals.set:
+          id: scene_fix
+          value: !lambda |-  
+              return id(current_scene);
+      - delay: 1s
+      - globals.set:
+          id: current_scene
+          value: !lambda |-  
+              return id(scene_fix);
+      - script.execute: scene_status_led
 
 
 ####### STATUS LEDS #######
@@ -456,6 +470,7 @@ binary_sensor:
             id: current_scene
             value: '1'
         - script.execute: scene_status_led
+        - script.execute: scene_status_fix
 ### DOUBLE CLICK
 #on_double_click:
 #      min_length: 20ms
@@ -505,7 +520,7 @@ binary_sensor:
             id: current_scene
             value: '2'
         - script.execute: scene_status_led
-        
+        - script.execute: scene_status_fix
         
 ####### BUTTON 7 #######
 
@@ -531,7 +546,7 @@ binary_sensor:
             id: current_scene
             value: '3'
         - script.execute: scene_status_led
-
+        - script.execute: scene_status_fix
 
 ####### CEILING LIGHT HA STATUS #######
 
@@ -563,7 +578,6 @@ binary_sensor:
       - display.page.show: changed
       - script.execute: display_timer
 
-
 ####### RGBW CORNER HA STATUS #######
 
   - platform: homeassistant
@@ -594,6 +608,7 @@ binary_sensor:
       - display.page.show: changed
       - script.execute: display_timer
 
+
 ####### BAULAMPE HA STATUS #######
 
   - platform: homeassistant
@@ -623,6 +638,7 @@ binary_sensor:
             - script.execute: master_check_status
       - display.page.show: changed
       - script.execute: display_timer
+
 
 ####### LED MASTER HA STATUS #######
 
@@ -666,17 +682,87 @@ time:
 
 text_sensor:
 
+#### current scene ####
+
+  - platform: homeassistant
+    id: active_scene
+    entity_id: input_select.active_scene
+    on_value:
+      - if:
+          condition:
+            - text_sensor.state:
+                id: active_scene
+                state: 'no_scene'
+          then:
+            - globals.set:
+                id: current_scene
+                value: '0'
+            - script.execute: scene_status_led
+      - if:
+          condition:
+            - text_sensor.state:
+                id: active_scene
+                state: 'scene_1'
+          then:
+            - globals.set:
+                id: current_scene
+                value: '1'
+            - script.execute: scene_status_led
+      - if:
+          condition:
+            - text_sensor.state:
+                id: active_scene
+                state: 'scene_2'
+          then:
+            - globals.set:
+                id: current_scene
+                value: '2'
+            - script.execute: scene_status_led
+      - if:
+          condition:
+            - text_sensor.state:
+                id: active_scene
+                state: 'scene_3'
+          then:
+            - globals.set:
+                id: current_scene
+                value: '3'
+            - script.execute: scene_status_led
+
 ####### MEDIA PLAYER TITLE #######
 
   - platform: homeassistant
     id: title
     entity_id: sensor.media_player_title
+    on_value:
+      then:
+        - display.page.show: music
+        - script.execute: display_timer
+        - globals.set:
+            id: pos_title
+            value: '0'
+        - globals.set:
+            id: pos_artist
+            value: '0'
 
+ 
 ####### MEDIA PLAYER ARTIST #######
 
   - platform: homeassistant
     id: artist
     entity_id: sensor.media_player_artist
+    on_value:
+      then:
+        - display.page.show: music
+        - script.execute: display_timer
+        - globals.set:
+            id: pos_title
+            value: '0'
+        - globals.set:
+            id: pos_artist
+            value: '0'
+
+
 
 ####### MEDIA PLAYER VOLUME
 
@@ -690,12 +776,18 @@ text_sensor:
         - logger.log:
             format: "%s"
             args: ['id(hass_vol).state.c_str()']
+        - display.page.show: music
+        - script.execute: display_timer
 
 ####### MEDIA PLAYER STATE #######
 
   - platform: homeassistant
     id: playing
     entity_id: sensor.media_player_state
+    on_value:
+      then:
+        - display.page.show: music
+        - script.execute: display_timer
 
 ####### LAST CHANGED ENTITY #######
 
@@ -915,6 +1007,9 @@ globals:
     type: bool
     initial_value: "false"
   - id: current_scene
+    type: int
+    initial_value: '0'
+  - id: scene_fix
     type: int
     initial_value: '0'
   
