@@ -21,6 +21,9 @@ logger:
 # Enable Home Assistant API
 api:
 
+ota:
+
+
 sensor:
 
 ####### ROTARY ENCODER #######
